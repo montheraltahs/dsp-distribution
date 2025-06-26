@@ -1,197 +1,132 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DSP Route Distribution</title>
+    <title>Route Distribution System</title>
     <style>
         body {
             font-family: Arial, sans-serif;
             margin: 20px;
-            background-color: #f5f5f5;
         }
-
         .container {
-            max-width: 800px;
+            max-width: 600px;
             margin: 0 auto;
-            padding: 20px;
-            background-color: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-
-        .input-section {
-            margin-bottom: 20px;
-            text-align: center;
+        .result {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
         }
-
-        input[type="number"] {
-            padding: 8px;
-            font-size: 16px;
-            width: 100px;
-            margin-right: 10px;
-        }
-
-        button {
-            padding: 8px 16px;
-            font-size: 16px;
-            background-color: #232F3E;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            margin: 0 5px;
-        }
-
-        button:hover {
-            background-color: #37475A;
-        }
-
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 20px;
+            margin-top: 10px;
         }
-
         th, td {
-            padding: 12px;
+            border: 1px solid #ccc;
+            padding: 8px;
             text-align: left;
-            border-bottom: 1px solid #ddd;
         }
-
-        th {
-            background-color: #232F3E;
-            color: white;
-        }
-
-        tr:nth-child(even) {
-            background-color: #f9f9f9;
-        }
-
-        .next-dsp {
-            text-align: center;
-            margin-top: 20px;
-            font-weight: bold;
-            color: #232F3E;
+        #lastUpdate {
+            font-size: 0.8em;
+            color: #666;
+            margin-top: 10px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="input-section">
-            <input type="number" id="routeInput" min="1" placeholder="Routes">
+        <h2>Route Distribution System</h2>
+        <div>
+            <label for="routeCount">Number of Extra Routes:</label>
+            <input type="number" id="routeCount" min="1">
             <button onclick="distributeRoutes()">Distribute</button>
-            <button onclick="resetRoutes()">Reset</button>
         </div>
-
-        <div class="next-dsp" id="nextDsp"></div>
-
-        <table>
-            <thead>
+        <div class="result">
+            <h3>Distribution Results:</h3>
+            <table id="resultTable">
                 <tr>
-                    <th>DSP Name</th>
-                    <th>Extra Routes</th>
+                    <th>DSP</th>
+                    <th>Routes</th>
                 </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>SONL</td>
-                    <td id="sonl-routes">0</td>
-                </tr>
-                <tr>
-                    <td>RURN</td>
-                    <td id="rurn-routes">0</td>
-                </tr>
-                <tr>
-                    <td>ALGZ</td>
-                    <td id="algz-routes">0</td>
-                </tr>
-            </tbody>
-        </table>
+            </table>
+            <div id="lastUpdate"></div>
+        </div>
     </div>
 
     <script>
-        // Use a shared key for storing global state
-        const GLOBAL_STATE_KEY = 'dsp_global_state';
-        const dsps = ['sonl', 'rurn', 'algz'];
+        const SHEET_ID = '1UldFdTKFHVO51UZwjdfncdSgcTpCfzLF1AmrahjhRlY';
+        const API_KEY = 'AIzaSyA1pLzkvtgEMMfnp9JMZ1UT7gBYDula69o';
+        const dsps = ['SONL', 'RURN', 'ALGZ'];
+        let lastDspIndex = 0;
 
-        // Function to get global state
-        function getGlobalState() {
-            const state = localStorage.getItem(GLOBAL_STATE_KEY);
-            return state ? JSON.parse(state) : { currentIndex: 0, timestamp: Date.now() };
+        // Load the last index when page loads
+        window.onload = loadLastIndex;
+
+        function loadLastIndex() {
+            fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/RouteDistribution!A1:B1?key=${API_KEY}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.values && data.values[0]) {
+                        lastDspIndex = parseInt(data.values[0][0]);
+                        document.getElementById('lastUpdate').textContent = 
+                            `Last updated: ${data.values[0][1]}`;
+                    }
+                })
+                .catch(error => console.error('Error:', error));
         }
 
-        // Function to set global state
-        function setGlobalState(state) {
-            state.timestamp = Date.now();
-            localStorage.setItem(GLOBAL_STATE_KEY, JSON.stringify(state));
-        }
+        function updateSheet(index) {
+            const now = new Date().toLocaleString();
+            const body = {
+                values: [[index, now]]
+            };
 
-        // Check for state updates every second
-        setInterval(() => {
-            const currentState = getGlobalState();
-            if (currentState.timestamp > lastCheckTimestamp) {
-                currentDspIndex = currentState.currentIndex;
-                updateNextDspDisplay();
-                lastCheckTimestamp = currentState.timestamp;
-            }
-        }, 1000);
-
-        let currentDspIndex = getGlobalState().currentIndex;
-        let lastCheckTimestamp = Date.now();
-
-        function updateNextDspDisplay() {
-            const nextDsp = dsps[currentDspIndex].toUpperCase();
-            document.getElementById('nextDsp').textContent = `Next distribution starts with: ${nextDsp}`;
+            fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/RouteDistribution!A1:B1?key=${API_KEY}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(body)
+            })
+            .catch(error => console.error('Error:', error));
         }
 
         function distributeRoutes() {
-            const routeInput = document.getElementById('routeInput');
-            const routes = parseInt(routeInput.value);
-
-            if (isNaN(routes) || routes < 1) {
-                alert('Please enter a valid number of routes (minimum 1)');
+            const routeCount = parseInt(document.getElementById('routeCount').value);
+            if (!routeCount || routeCount < 1) {
+                alert('Please enter a valid number of routes');
                 return;
             }
 
-            // Reset all routes to 0
-            dsps.forEach(dsp => {
-                document.getElementById(`${dsp}-routes`).textContent = '0';
-            });
+            let distribution = {};
+            dsps.forEach(dsp => distribution[dsp] = 0);
 
-            let remainingRoutes = routes;
-            let distributionIndex = currentDspIndex;
-
-            while (remainingRoutes > 0) {
-                const dsp = dsps[distributionIndex];
-                const currentValue = parseInt(document.getElementById(`${dsp}-routes`).textContent);
-                document.getElementById(`${dsp}-routes`).textContent = currentValue + 1;
-                distributionIndex = (distributionIndex + 1) % dsps.length;
-                remainingRoutes--;
+            for (let i = 0; i < routeCount; i++) {
+                distribution[dsps[lastDspIndex]] = (distribution[dsps[lastDspIndex]] || 0) + 1;
+                lastDspIndex = (lastDspIndex + 1) % dsps.length;
             }
 
-            // Update the starting point for next distribution
-            currentDspIndex = distributionIndex;
-            setGlobalState({ currentIndex: currentDspIndex });
+            // Update Google Sheet
+            updateSheet(lastDspIndex);
 
-            // Update next DSP display
-            updateNextDspDisplay();
-            
-            // Clear input
-            routeInput.value = '';
+            // Display results
+            const resultTable = document.getElementById('resultTable');
+            resultTable.innerHTML = '<tr><th>DSP</th><th>Routes</th></tr>';
+
+            for (const dsp in distribution) {
+                const row = resultTable.insertRow(-1);
+                const cell1 = row.insertCell(0);
+                const cell2 = row.insertCell(1);
+                cell1.textContent = dsp;
+                cell2.textContent = distribution[dsp];
+            }
+
+            document.getElementById('lastUpdate').textContent = 
+                `Last updated: ${new Date().toLocaleString()}`;
         }
 
-        function resetRoutes() {
-            dsps.forEach(dsp => {
-                document.getElementById(`${dsp}-routes`).textContent = '0';
-            });
-            currentDspIndex = 0;
-            setGlobalState({ currentIndex: 0 });
-            updateNextDspDisplay();
-        }
-
-        // Initialize next DSP display when page loads
-        updateNextDspDisplay();
+        // Add auto-refresh every 30 seconds
+        setInterval(loadLastIndex, 30000);
     </script>
 </body>
 </html>
